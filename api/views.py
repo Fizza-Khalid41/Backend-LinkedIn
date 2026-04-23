@@ -148,4 +148,19 @@ def add_comment(request, post_id):
         'content': comment.content
     })
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_comments(request, post_id):
+    post = Post.objects.get(id=post_id)
+    comments = Comment.objects.filter(post=post).order_by('-created_at')
+
+    data = []
+    for comment in comments:
+        data.append({
+            'author': comment.author.username,
+            'content': comment.content,
+        })
+
+    return Response(data)
+
 
