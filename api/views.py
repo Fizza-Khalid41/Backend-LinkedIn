@@ -35,11 +35,11 @@ def login(request):
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
-        return Response({'error': 'User nahi mila'}, status=404)
+        return Response({'error': 'user does not exist'}, status=404)
 
     user = auth_authenticate(username=user.username, password=password)
     if user is None:
-        return Response({'error': 'Password galat hai'}, status=400)
+        return Response({'error': 'wrong password'}, status=400)
 
     refresh = RefreshToken.for_user(user)
 
