@@ -186,9 +186,9 @@ def get_users(request):
 @api_view(['POST'])
 def send_request(request, user_id):
     receiver = User.objects.get(id = user_id)
-    if Network.objects.filter(sender = send_request, receiver= receiver).exists():
+    if Network.objects.filter(sender = request.user, receiver= receiver).exists():
         return Response({'error': 'Already sent'}, status=400)
-    Network.objects.create(sender= send_request, receiver= receiver)
+    Network.objects.create(sender= request.user, receiver= receiver)
     return Response ({'message': 'Request sent'})
 
 @api_view(['POST'])
