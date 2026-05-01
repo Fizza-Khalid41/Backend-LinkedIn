@@ -64,3 +64,13 @@ class Network(models.Model):
 
     def __str__(self):
         return f"{self.sender.username}  → {self.receiver.username} ({self.status})"
+
+class Job(models.Model):
+    company = models.CharField(max_length=200)
+    job_type = models.CharField(max_length=200, default= "Full-time")
+    location = models.CharField(max_length=200)
+    title = models.CharField(max_length=200)
+    posted = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title}- {self.company}" 
