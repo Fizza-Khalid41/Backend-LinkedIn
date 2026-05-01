@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Post, Like, Comment, Profile, Network
+from .models import Post, Like, Comment, Profile, Network,Job
 
 
 # Register
@@ -248,7 +248,26 @@ def get_pending_requests(request):
             'email': r.sender.email,
         })
     
-     return Response(data)    
+     return Response(data) 
+
+@api_view(['GET']) 
+@permission_classes([IsAuthenticated])  
+def get_jobs(request):
+    jobs = Job.objects.all().order_by('-posted')
+
+    job_list =[]
+
+    for job in jobs:
+         job_data ={
+             'id' : job.id,
+             'title': job.title,
+             'company':job.company,
+             'location':job.location,
+             'job_type': job.job_title
+             }
+         job_list.append(job_data)
+
+         return Response(job_list)     
 
 
 
