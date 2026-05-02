@@ -17,5 +17,5 @@ urlpatterns = [
     path('connections/send/<int:user_id>/', views.send_request),
     path('connections/accept/<int:user_id>/', views.accept_request),
     path('connections/reject/<int:user_id>/', views.reject_request),
-  
+    path('jobs/', views.get_jobs)
 ]
