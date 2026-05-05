@@ -263,11 +263,11 @@ def get_jobs(request):
              'title': job.title,
              'company':job.company,
              'location':job.location,
-             'job_type': job.job_title
+             'job_type': job.job_type
              }
          job_list.append(job_data)
 
-         return Response(job_list)     
+    return Response(job_list)     
 
 
 
