@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Post, Like, Comment, Profile
+from .models import Post, Like, Comment, Profile, Network,Job
 
 
 # Register
@@ -162,5 +162,112 @@ def get_comments(request, post_id):
         })
 
     return Response(data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_users(request):
+    users = User.objects.exclude(id= request.user.id)
+    data = []
+    for u in users:
+        connection = Network.objects.filter(
+            sender= request.user, receiver = u
+            ).first()or Network.objects.filter(sender = u , receiver = request.user).first()
+        
+        data.append({
+            'id': u.id,
+            'name': u.username,
+            'email': u.email,
+            'status': connection.status if connection else 'none'
+       })
+    
+    return Response (data)
+
+@api_view(['POST'])
+def send_request(request, user_id):
+    receiver = User.objects.get(id = user_id)
+    if Network.objects.filter(sender = request.user, receiver= receiver).exists():
+        return Response({'error': 'Already sent'}, status=400)
+    Network.objects.create(sender= request.user, receiver= receiver)
+    return Response ({'message': 'Request sent'})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def accept_request(request,user_id):
+    sender = User.objects.get(id= user_id)
+    connection = Network.objects.filter(sender = sender, receiver= request.user).first()
+    if not connection:
+        return Response({'error': 'Not found'}, status=400)
+    
+    connection.status = 'accepted'
+    connection.save()
+    return Response({'message': 'Accepted'})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reject_request(request,user_id):
+    sender = User.objects.get(id= user_id)
+    connection = Network.objects.filter(sender = sender, receiver= request.user).first()
+    if not connection:
+        return Response({'error': 'Not found'}, status=400)
+    
+    connection.status = 'rejected'
+    connection.save()
+    return Response({'message': 'Rejected'})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_connections(request):
+    connections = Network.objects.filter(status='accepted').filter(sender=request.user) | \
+                  Network.objects.filter(status='accepted').filter(receiver=request.user)
+
+
+    data=[]
+    for c in connections:
+        other= c.reciever if c.sender == request.user else c.sender
+        data.append({
+            'id': other.id,
+            'name': other.username,
+            'email': other.email
+        })
+    return Response(data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_pending_requests(request):
+     requests = Network.objects.filter(
+        receiver=request.user,
+        status='pending'
+    )
+     data = []                        
+    
+     for r in requests:               
+        data.append({               
+            'id': r.sender.id,
+            'name': r.sender.username,
+            'email': r.sender.email,
+        })
+    
+     return Response(data) 
+
+@api_view(['GET']) 
+@permission_classes([IsAuthenticated])  
+def get_jobs(request):
+    jobs = Job.objects.all().order_by('-posted')
+
+    job_list =[]
+
+    for job in jobs:
+         job_data ={
+             'id' : job.id,
+             'title': job.title,
+             'company':job.company,
+             'location':job.location,
+             'job_type': job.job_type
+             }
+         job_list.append(job_data)
+
+    return Response(job_list)     
+
 
 
