@@ -274,7 +274,7 @@ def get_jobs(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def conversation(request):
+def conversations(request):
     convs = Conversation.objects.filter(participants = request.user)
     data = []
     for c in convs:
@@ -302,7 +302,7 @@ def get_messages(request, conversation_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def sent_message(request):
+def send_message(request):
     conversation_id= request.data.get('conversation_id')
     content = request.data.get('content')
     if not conversation_id or not content:
