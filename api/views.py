@@ -318,3 +318,40 @@ def send_message(request):
         content=content
     )
     return Response({"message": "sent"}, status=status.HTTP_201_CREATED)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_conversation(request):
+    username = request.data.get('username')
+    
+    if not username:
+        return Response(
+            {"error": "username required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+   
+    try:
+        recipient = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return Response(
+            {"error": "User not found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    
+    existing = Conversation.objects.filter(
+        participants=request.user
+    ).filter(
+        participants=recipient
+    ).first()
+    
+    if existing:
+        return Response({"id": existing.id}, status=status.HTTP_200_OK)
+    
+   
+    conv = Conversation.objects.create()
+    conv.participants.add(request.user, recipient)
+    conv.save()
+    
+    return Response({"id": conv.id}, status=status.HTTP_201_CREATED)
