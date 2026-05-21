@@ -294,7 +294,8 @@ def get_messages(request, conversation_id):
     for m in msgs:
         data.append({
             "sender" : m.sender.username,
-            "content": m.content
+            "content": m.content,
+            "is_mine": m.sender == request.user 
         })
 
     return Response(data, status=status.HTTP_200_OK)
