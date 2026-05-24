@@ -74,3 +74,35 @@ class Job(models.Model):
 
     def __str__(self):
         return f"{self.title}- {self.company}" 
+    
+
+class Conversation(models.Model):
+    participants = models. ManyToManyField(User, related_name='conversations')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        names = ", ".join([u.username for u in self.participants.all()])
+        return f"Conversation: {names}"
+    
+    def last_message(self):
+        return self.messages.order_by('-sent_at').first()
+     
+    def unread_count(self, user):
+        return self.messages.filter(is_read = False).exclude(sender= user).count()
+    
+class Message(models.Model):
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
+    sender= models.ForeignKey(User,on_delete=models.CASCADE, related_name='sent_messages')
+    content= models.TextField()
+    is_read= models.BooleanField(default=False)
+    sent_at= models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['sent_at']
+  
+    def __str__(self):
+        return f"{self.sender.username}: {self.content[:40]}"

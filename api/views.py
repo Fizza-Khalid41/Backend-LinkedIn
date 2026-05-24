@@ -4,8 +4,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.shortcuts import get_object_or_404
+from rest_framework import status
 
-from .models import Post, Like, Comment, Profile, Network,Job
+from .models import Post, Like, Comment, Profile, Network,Job, Conversation, Message
 
 
 # Register
@@ -267,7 +269,90 @@ def get_jobs(request):
              }
          job_list.append(job_data)
 
-    return Response(job_list)     
+    return Response(job_list)   
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def conversations(request):
+    convs = Conversation.objects.filter(participants = request.user)
+    data = []
+    for c in convs:
+        data.append({
+            "id" : c.id,
+            "participants":[u.username for u in c.participants.all()]
 
+        })
+    return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_messages(request, conversation_id):
+    msgs = Message.objects.filter(conversation_id= conversation_id)
+    data =[]
+    for m in msgs:
+        data.append({
+            "sender" : m.sender.username,
+            "content": m.content,
+            "is_mine": m.sender == request.user 
+        })
+
+    return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_message(request):
+    conversation_id= request.data.get('conversation_id')
+    content = request.data.get('content')
+    if not conversation_id or not content:
+        return Response(
+            {"error": "conversation id and content are required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    conv = get_object_or_404(Conversation, id=conversation_id)
+
+    Message.objects.create(
+        conversation=conv,
+        sender=request.user,
+        content=content
+    )
+    return Response({"message": "sent"}, status=status.HTTP_201_CREATED)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_conversation(request):
+    username = request.data.get('username')
+    
+    if not username:
+        return Response(
+            {"error": "username required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+   
+    try:
+        recipient = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return Response(
+            {"error": "User not found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    
+    existing = Conversation.objects.filter(
+        participants=request.user
+    ).filter(
+        participants=recipient
+    ).first()
+    
+    if existing:
+        return Response({"id": existing.id}, status=status.HTTP_200_OK)
+    
+   
+    conv = Conversation.objects.create()
+    conv.participants.add(request.user, recipient)
+    conv.save()
+    
+    return Response({"id": conv.id}, status=status.HTTP_201_CREATED)
