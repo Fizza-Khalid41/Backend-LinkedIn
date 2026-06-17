@@ -6,8 +6,12 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+from django.utils import timezone
+from datetime import timedelta
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
 
-from .models import Post, Like, Comment, Profile, Network,Job, Conversation, Message
+from .models import Post, Like, Comment, Profile, Network,Job, Conversation, Message, Notification
 
 
 # Register
@@ -68,6 +72,11 @@ def get_profile(request):
         'bio': profile.bio,
         'headline': profile.headline,
         'skills': profile.skills,
+
+        'profile_picture': request.build_absolute_uri(profile.profile_picture.url)
+                           if profile.profile_picture else None,
+        'cover_picture':   request.build_absolute_uri(profile.cover_picture.url)
+                           if profile.cover_picture else None,
     })
 
 
@@ -356,3 +365,189 @@ def create_conversation(request):
     conv.save()
     
     return Response({"id": conv.id}, status=status.HTTP_201_CREATED)
+
+
+def _time_ago(created_at):
+    now  = timezone.now()
+    diff = now - created_at
+    if diff < timedelta(minutes=1): return "just now"
+    if diff < timedelta(hours=1):   return f"{int(diff.seconds // 60)}m"
+    if diff < timedelta(days=1):    return f"{int(diff.seconds // 3600)}h"
+    if diff < timedelta(days=7):    return f"{diff.days}d"
+    return created_at.strftime("%b %d")
+
+
+def _build_message(n):
+    try:
+        sender_name = n.sender.username if n.sender else "Someone"
+        msgs = {
+            'like':               f"{sender_name} liked your post.",
+            'comment':            f"{sender_name} commented on your post.",
+            'connection_request': f"{sender_name} sent you a connection request.",
+            'connection_accept':  f"{sender_name} accepted your connection request.",
+            'profile_view':       f"{sender_name} viewed your profile.",
+            'job_alert':          f"New job: {n.job.title} at {n.job.company}" if n.job else "New job posted.",
+            'mention':            f"{sender_name} mentioned you in a post.",
+        }
+        return msgs.get(n.notif_type, "You have a new notification.")
+    except Exception:
+        return "You have a new notification."
+ 
+ 
+def _notif_to_dict(n):
+    try:
+        sender_data = {
+            'username': n.sender.username,
+            'profile_picture': (
+                n.sender.profile.profile_picture.url
+                if hasattr(n.sender, 'profile') and n.sender.profile.profile_picture
+                else None
+            )
+        } if n.sender else None
+    except Exception:
+        sender_data = None
+ 
+    return {
+        'id':         n.id,
+        'notif_type': n.notif_type,
+        'message':    _build_message(n),
+        'is_read':    n.is_read,
+        'time_ago':   _time_ago(n.created_at),
+        'sender':     sender_data,
+        'job_url':    None,
+    }
+ 
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def notifications_view(request):
+    
+    filter_type = request.GET.get('filter', 'all')  
+
+    notifications = Notification.objects.filter(recipient=request.user)
+
+    if filter_type == 'jobs':
+        notifications = notifications.filter(notif_type='job_alert')
+    elif filter_type == 'my_posts':
+        notifications = notifications.filter(notif_type__in=['like', 'comment'])
+    elif filter_type == 'mentions':
+        notifications = notifications.filter(notif_type='mention')
+  
+
+   
+    notifications.update(is_read=True)
+
+    unread_count = Notification.objects.filter(
+        recipient=request.user, is_read=False
+    ).count()
+
+    context = {
+        'notifications': notifications,
+        'filter_type':   filter_type,
+        'unread_count':  unread_count,
+    }
+    data = [_notif_to_dict(n) for n in notifications]
+    return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def unread_count_view(request):
+   
+    count = Notification.objects.filter(
+        recipient=request.user,
+        is_read=False
+    ).count()
+    return JsonResponse({'unread_count': count})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_read_view(request, notif_id):
+    
+    
+    notif = get_object_or_404(Notification, id=notif_id, recipient=request.user)
+    notif.mark_as_read()
+    return JsonResponse({'status': 'ok', 'id': notif_id})
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_all_read_view(request):
+    
+    updated = Notification.objects.filter(
+        recipient=request.user,
+        is_read=False
+    ).update(is_read=True)
+    return JsonResponse({'status': 'ok', 'marked_read': updated})
+
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def delete_notification_view(request, notif_id):
+    
+    notif = get_object_or_404(Notification, id=notif_id, recipient=request.user)
+    notif.delete()
+    return JsonResponse({'status': 'deleted', 'id': notif_id})
+
+
+
+
+def create_like_notification(liker, post):
+    
+    if post.author != liker:
+        Notification.objects.create(
+            recipient  = post.author,
+            sender     = liker,
+            notif_type = 'like',
+            post       = post,
+        )
+
+def create_comment_notification(commenter, post, comment):
+   
+    if post.author != commenter:
+        Notification.objects.create(
+            recipient  = post.author,
+            sender     = commenter,
+            notif_type = 'comment',
+            post       = post,
+            comment    = comment,
+        )
+
+def create_connection_request_notification(sender, receiver):
+    
+    Notification.objects.create(
+        recipient  = receiver,
+        sender     = sender,
+        notif_type = 'connection_request',
+    )
+
+def create_connection_accept_notification(acceptor, original_sender):
+    
+    Notification.objects.create(
+        recipient  = original_sender,
+        sender     = acceptor,
+        notif_type = 'connection_accept',
+    )
+
+def create_profile_view_notification(viewer, profile_owner):
+    
+    if viewer != profile_owner:
+        Notification.objects.create(
+            recipient  = profile_owner,
+            sender     = viewer,
+            notif_type = 'profile_view',
+        )
+
+def create_job_alert_notification(job, recipient):
+   
+    Notification.objects.create(
+        recipient  = recipient,
+        sender     = None,       
+        notif_type = 'job_alert',
+        job        = job,
+    )

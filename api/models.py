@@ -106,3 +106,91 @@ class Message(models.Model):
   
     def __str__(self):
         return f"{self.sender.username}: {self.content[:40]}"
+    
+
+
+class Notification(models.Model):
+ 
+    
+    NOTIF_TYPE = [
+        ('like',               'Like'),               
+        ('comment',            'Comment'),            
+        ('connection_request', 'Connection Request'),  
+        ('connection_accept',  'Connection Accept'),   
+        ('profile_view',       'Profile View'),        
+        ('job_alert',          'Job Alert'),           
+        ('mention',            'Mention'),            
+    ]
+ 
+    
+    recipient = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notifications'
+    )
+ 
+    
+    sender = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='sent_notifications'
+    )
+ 
+    notif_type = models.CharField(max_length=30, choices=NOTIF_TYPE)
+ 
+   
+    post = models.ForeignKey(        
+        Post,
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='notifications'
+    )
+    comment = models.ForeignKey(      
+        Comment,
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='notifications'
+    )
+    network = models.ForeignKey(      
+        Network,
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='notifications'
+    )
+    job = models.ForeignKey(          
+        Job,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='notifications'
+    )
+ 
+    
+    is_read    = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+ 
+    class Meta:
+        ordering = ['-created_at']  
+ 
+    def __str__(self):
+        return f"[{self.notif_type}] → {self.recipient.username} | read={self.is_read}"
+ 
+    def mark_as_read(self):
+        self.is_read = True
+        self.save(update_fields=['is_read'])
+ 
+   
+    def get_message(self):
+        sender_name = self.sender.get_full_name() or self.sender.username if self.sender else "Someone"
+ 
+        messages = {
+            'like' : f"{sender_name} liked your post.",
+            'comment' : f"{sender_name} commented on your post.",
+            'connection_request' : f"{sender_name} sent you a connection request.",
+            'connection_accept' : f"{sender_name} accepted your connection request.",
+            'profile_view' : f"{sender_name} viewed your profile.",
+            'job_alert' : f"New job alert:{self.job.title}at{self.job.company}",
+
+        }
+
+        return messages.get( self.notif_type,"You have a new notification.")
